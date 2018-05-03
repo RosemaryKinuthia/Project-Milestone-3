@@ -1,0 +1,274 @@
+---
+title: "Project Milestone 3-KNW"
+author: "Rosemary Kinuthia"
+date: "4/30/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#PACKAGES
+Load required packages
+```{r}
+library(tidyverse)
+library(class)
+library(rpart)
+library(NHANES)
+library(RColorBrewer)
+library(plot3D)
+library(parallel)
+library(randomForestSRC)
+library(ggRandomForests)
+library(mosaic)
+library(readr)
+library(readxl)
+
+```
+
+
+##DATA
+Loading the data using read_excel(), pointing the path to your local file.
+```{r} 
+
+# Create dataset with age, gender, course, attrition
+KNW_noNA <- read_csv("KNW_noNA.csv")
+KNW <- KNW_noNA %>% dplyr::select(Age, Gender, County, FacilityAgent, Course, Attrition) 
+
+```
+
+
+Check out raw data
+```{r}
+
+# View first 10 rows
+KNW[1:10,] %>%
+    knitr::kable(caption = "First 10 rows")
+
+```
+
+Summary statistics
+```{r}
+
+summary(KNW)
+
+```
+
+```{r}
+#What is the marginal distribution of Attrition?
+
+tally(~ Attrition, data = KNW, format = "percent")
+```
+
+```{r}
+
+class(KNW)
+
+```
+
+```{r}
+
+# Convert back to dataframe
+KNW <- as.data.frame(KNW)
+glimpse(KNW)
+```
+
+
+```{r}
+#Convert to factor then to numeric (changes character to numbers)
+
+KNW$Age <- as.factor(KNW$Age)%>% as.numeric(KNW$Age)
+KNW$Gender <- as.factor(KNW$Gender)%>% as.numeric(KNW$Gender)
+KNW$County <- as.factor(KNW$County)%>% as.numeric(KNW$County)
+KNW$FacilityAgent <- as.factor(KNW$FacilityAgent)%>% as.numeric(KNW$FacilityAgent)
+KNW$Course <- as.factor(KNW$Course)%>% as.numeric(KNW$Course)
+KNW$Attrition <- as.factor(KNW$Attrition)%>% as.numeric(KNW$Attrition)
+
+head(KNW)
+glimpse(KNW)
+
+```
+
+
+```{r}
+#Remove missing values
+
+KNW <- na.omit(KNW)
+
+glimpse(KNW)
+```
+
+
+```{r}
+#Summary statistics
+summary(KNW)
+
+```
+
+```{r}
+par("mar")
+```
+
+#VISUALIZE DATA
+```{r}
+#Histograms
+library(ggplot2)
+ggplot(KNW, aes (Age))+
+  geom_histogram()
+
+ggplot(KNW, aes (Gender))+
+  geom_histogram()
+
+ggplot(KNW, aes (County))+
+  geom_histogram()
+
+ggplot(KNW, aes (FacilityAgent))+
+  geom_histogram()
+
+ggplot(KNW, aes (Course))+
+  geom_histogram()
+
+ggplot(KNW, aes (Attrition))+
+  geom_histogram()
+```
+
+
+```{r}
+#Box  and whisker plots
+graphics.off()
+ par("mar")
+ par(mar=c(1,1,1,1))
+
+par(mfrow=c(1,6))
+for(i in 1:6) {
+    boxplot(KNW[,i], main=names(KNW)[i])
+}
+```
+
+
+
+```{r}
+#use a missing plot to get a quick idea of the amount of missing data
+library(Amelia)
+library(mlbench)
+missmap(KNW, col=c("blue", "red"), legend=FALSE)
+```
+
+
+```{r}
+#Look at correlations
+library(corrplot)
+correlations <- cor(KNW[,1:6])
+corrplot(correlations, method="circle")
+```
+
+
+```{r}
+pairs(KNW, col=KNW$Attrition)
+```
+
+#PREDICTION
+```{r}
+# Logistics Regression
+glm.fit <- glm(Attrition ~ Age + Gender + County + FacilityAgent + Course, data = KNW)
+               
+```
+
+
+```{r}
+#Do a summary to tells us something about the fit:
+summary(glm.fit)
+
+```
+
+```{r}
+#look at the first 5 probabilities
+glm.probs <- predict(glm.fit,type = "response")
+glm.probs[1:5]
+```
+
+```{r}
+glm.pred <- ifelse(glm.probs > 0.5, "Yes", "No")
+```
+
+
+```{r}
+attach(KNW)
+table(glm.pred,Attrition)
+
+mean(glm.pred == Attrition)
+```
+
+
+```{r}
+# Make training and test set
+train = Gender=1
+glm.fit <- glm(Attrition ~ Age + Gender + County + FacilityAgent + 
+    Course, 
+              data = KNW, 
+              family = binomial, 
+              subset = train)
+
+glm.probs <- predict(glm.fit, 
+                    newdata = KNW[!train,], 
+                    type = "response")
+
+glm.pred <- ifelse(glm.probs > 0.5, "Yes", "No")
+```
+
+```{r}
+#Make a new variable to store subset of the data
+Attrition.2 = KNW$Attrition[!train]
+table(glm.pred, Attrition.2)
+
+mean(glm.pred == Attrition.2)
+
+```
+
+
+```{r}
+#Fit a smaller model
+glm.fit = glm(Attrition ~ Age + Gender + Course = KNW, family = binomial, subset = train)
+glm.probs = predict(glm.fit, newdata = KNW[!train,], type = "response")
+glm.pred = ifelse(glm.probs > 0.5, "Yes", "No")
+table(glm.pred, Attrition.2)
+
+
+mean(glm.pred == Attrition.2)
+```
+
+```{r}
+#summary() of glm.fit to see if there are any signficant changes.
+
+summary(glm.fit)
+```
+
+
+
+The Github repository for this project can be accessed via this link [https://github.com/RosemaryKinuthia/Project-Milestone-3.git](https://github.com/RosemaryKinuthia/Project-Milestone-3.git)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
